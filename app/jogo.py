@@ -3,6 +3,7 @@ Fluxo da partida e mensagens de tela.
 """
 
 import random
+from multicast import Publicador
 from regras import novo_baralho, pontuar, travada, resultado
 
 def mostrar(nome, mao):
@@ -58,7 +59,7 @@ def jogar(conexao, host, debug=False):
     minha = 0 if host else 1  # 0 = Dealer 1 = jogador
     outro = 1 - minha
 
-    if host: #handshake: o Dealer envia a seed
+    if host: #handshake: o dealer envia a seed
         seed = random.randint(0, 10**6)
         conexao.enviar(f"INICIO|{seed}")
     else:
@@ -67,6 +68,10 @@ def jogar(conexao, host, debug=False):
     baralho = novo_baralho(seed)
     maos = [[baralho.pop(), baralho.pop()], [baralho.pop(), baralho.pop()]]
     parados = [travada(m) for m in maos]
+
+    #multicast: publica a própria mão inicial nos displays (a seed identifica a partida)
+    pub = Publicador(str(seed), minha)
+    pub.publicar("INICIO", maos[minha], parados[minha])
 
     if debug:
         print(f"[DEBUG] Dealer: {maos[0]} | Jogador: {maos[1]}")
@@ -110,6 +115,7 @@ def jogar(conexao, host, debug=False):
 
         if vez == minha:
             conexao.enviar(acao)
+            pub.publicar(acao, maos[minha], parados[minha])  #multicast: publica a ação nos displays
 
         vez = (1 - vez) if not parados[1 - vez] else vez #passa a vez para o outro jogador
 
@@ -120,3 +126,5 @@ def jogar(conexao, host, debug=False):
     mostrar("Oponente", maos[outro])
 
     print(resultado(pontuar(maos[minha]), pontuar(maos[outro])))
+
+    pub.repetir() 
